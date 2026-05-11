@@ -11,7 +11,6 @@ export type RootState = ReturnType<typeof rootReducer>;
 export const useAppDispatch = () => useDispatch<typeof store.dispatch>();
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
 
-
 const rootReducer = combineReducers({
     todoList: todoListReducer,
     rain: rainReducer,

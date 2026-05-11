@@ -1,6 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-const listItems = localStorage.getItem("listItems")
+const listItems = localStorage.getItem("listItems");
 
 export interface ITodoListState {
   todoList: {
@@ -9,7 +9,6 @@ export interface ITodoListState {
   }[];
   repeat: boolean;
 }
-
 
 const todoListSlice = createSlice({
   name: "todoList",

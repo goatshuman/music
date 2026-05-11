@@ -12,7 +12,7 @@ const modeSlice = createSlice({
   initialState,
   reducers: {
     setMode: (state, action) => {
-      state.mode = action.payload 
+      state.mode = action.payload;
     },
     changeDayNight: (state) => {
       state.mode = state.mode === 'day' ? 'night' : 'day';

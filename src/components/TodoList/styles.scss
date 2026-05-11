@@ -1,13 +1,12 @@
 .todoList {
   height: 200px;
-  // overflow-y: scroll;
 }
 
 .todolistList {
   height: 150px;
   overflow-y: scroll;
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .todolistList::-webkit-scrollbar {

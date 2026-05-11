@@ -1,7 +1,7 @@
 .videoIn {
   z-index: 1;
   object-fit: cover;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
@@ -13,7 +13,7 @@
 .videoOut {
   z-index: 1;
   object-fit: cover;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;

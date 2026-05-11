@@ -8,16 +8,11 @@ export interface IPlayerProps {
   songs: any;
 }
 
-const Player = ({
-  currentSongIndex,
-  setCurrentSongIndex,
-  songs,
-}: IPlayerProps) => {
+const Player = ({ currentSongIndex, setCurrentSongIndex, songs }: IPlayerProps) => {
   const data = useAppSelector((state: RootState) => state.volume);
-
   const { volumeValue } = data;
 
-  const audioElement = useRef<any>();
+  const audioElement = useRef<HTMLAudioElement>(null!);
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
@@ -34,42 +29,35 @@ const Player = ({
       setCurrentSongIndex(() => {
         let temp = currentSongIndex;
         temp++;
-
-        if (temp > songs.length - 1) {
-          temp = 0;
-        }
-
+        if (temp > songs.length - 1) temp = 0;
         return temp;
       });
     } else {
       setCurrentSongIndex(() => {
         let temp = currentSongIndex;
         temp--;
-
-        if (temp < 0) {
-          temp = songs.length - 1;
-        }
-
+        if (temp < 0) temp = songs.length - 1;
         return temp;
       });
     }
   };
+
   return (
-    <div className='music-player'>
+    <div className="music-player">
       <audio loop src={songs[currentSongIndex].src} ref={audioElement}></audio>
-      <div className='music-player--controls'>
-        <button className='skip-btn' onClick={() => SkipSong(false)}>
-          <img src='/assets/icons/prev.svg' alt='' />
+      <div className="music-player--controls">
+        <button className="skip-btn" onClick={() => SkipSong(false)}>
+          <img src={`${import.meta.env.BASE_URL}assets/icons/prev.svg`} alt="prev" />
         </button>
-        <button className='play-btn' onClick={() => setIsPlaying(!isPlaying)}>
+        <button className="play-btn" onClick={() => setIsPlaying(!isPlaying)}>
           {isPlaying ? (
-            <img src='/assets/icons/pause.svg' alt='' />
+            <img src={`${import.meta.env.BASE_URL}assets/icons/pause.svg`} alt="pause" />
           ) : (
-            <img src='/assets/icons/play.svg' alt='' />
+            <img src={`${import.meta.env.BASE_URL}assets/icons/play.svg`} alt="play" />
           )}
         </button>
-        <button className='skip-btn' onClick={() => SkipSong()}>
-          <img src='/assets/icons/next.svg' alt='' />
+        <button className="skip-btn" onClick={() => SkipSong()}>
+          <img src={`${import.meta.env.BASE_URL}assets/icons/next.svg`} alt="next" />
         </button>
       </div>
     </div>

@@ -1,34 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, ModalBody, Button } from 'react-bootstrap';
+import { useState, useEffect } from "react";
+import { Modal, Button } from "react-bootstrap";
 
 const FirstTimeModal = () => {
-  const [modal, setModal] = useState(false);
+  const [show, setShow] = useState(false);
 
-  // Check if it's the first time visiting the site
   useEffect(() => {
-    const visitedBefore = localStorage.getItem('visitedBefore');
+    const visitedBefore = localStorage.getItem("visitedBefore");
     if (!visitedBefore) {
-      setModal(true);
-      localStorage.setItem('visitedBefore', 'true');
+      setShow(true);
+      localStorage.setItem("visitedBefore", "true");
     }
   }, []);
 
-  const toggle = () => setModal(!modal);
-
-  const handleProceed = () => {
-    setModal(false);
-  };
-
   return (
-    <Modal isOpen={modal} toggle={toggle} centered>
-      <ModalBody>
+    <Modal show={show} onHide={() => setShow(false)} centered>
+      <Modal.Body>
         <h3>Attention</h3>
         <p>
-          It would be better to try this on a desktop for a better immersive experience.
+          It would be better to try this on a desktop for a better immersive
+          experience.
         </p>
         <p>Please consider starring the project on GitHub!</p>
-        <Button color='primary' onClick={handleProceed}>Proceed</Button>
-      </ModalBody>
+        <Button variant="primary" onClick={() => setShow(false)}>
+          Proceed
+        </Button>
+      </Modal.Body>
     </Modal>
   );
 };
