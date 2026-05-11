@@ -14,42 +14,70 @@ const Player = ({ currentSongIndex, setCurrentSongIndex, songs }: IPlayerProps) 
 
   const audioElement = useRef<HTMLAudioElement>(null!);
   const [isPlaying, setIsPlaying] = useState(false);
+  const isPlayingRef = useRef(false);
 
+  // Keep ref in sync so event listeners always have latest value
   useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  // Handle play/pause user toggle
+  useEffect(() => {
+    if (!audioElement.current) return;
+    const audio = audioElement.current;
     if (isPlaying) {
-      audioElement.current.play();
+      audio.play().catch(() => {});
     } else {
-      audioElement.current.pause();
+      audio.pause();
     }
+  }, [isPlaying]);
+
+  // Handle song change — wait for canplay before attempting playback
+  useEffect(() => {
+    if (!audioElement.current) return;
+    const audio = audioElement.current;
+
+    audio.pause();
+    audio.src = songs[currentSongIndex].src;
+    audio.load();
+
+    const onCanPlay = () => {
+      if (isPlayingRef.current) {
+        audio.play().catch(() => {});
+      }
+    };
+
+    audio.addEventListener("canplay", onCanPlay, { once: true });
+    return () => {
+      audio.removeEventListener("canplay", onCanPlay);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSongIndex]);
+
+  // Handle volume change
+  useEffect(() => {
+    if (!audioElement.current) return;
     audioElement.current.volume = volumeValue / 100;
-  });
+  }, [volumeValue]);
 
   const SkipSong = (forwards = true) => {
-    if (forwards) {
-      setCurrentSongIndex(() => {
-        let temp = currentSongIndex;
-        temp++;
-        if (temp > songs.length - 1) temp = 0;
-        return temp;
-      });
-    } else {
-      setCurrentSongIndex(() => {
-        let temp = currentSongIndex;
-        temp--;
-        if (temp < 0) temp = songs.length - 1;
-        return temp;
-      });
-    }
+    setCurrentSongIndex((prev: number) => {
+      if (forwards) {
+        return prev >= songs.length - 1 ? 0 : prev + 1;
+      } else {
+        return prev <= 0 ? songs.length - 1 : prev - 1;
+      }
+    });
   };
 
   return (
     <div className="music-player">
-      <audio loop src={songs[currentSongIndex].src} ref={audioElement}></audio>
+      <audio loop ref={audioElement} src={songs[currentSongIndex].src}></audio>
       <div className="music-player--controls">
         <button className="skip-btn" onClick={() => SkipSong(false)}>
           <img src={`${import.meta.env.BASE_URL}assets/icons/prev.svg`} alt="prev" />
         </button>
-        <button className="play-btn" onClick={() => setIsPlaying(!isPlaying)}>
+        <button className="play-btn" onClick={() => setIsPlaying((p) => !p)}>
           {isPlaying ? (
             <img src={`${import.meta.env.BASE_URL}assets/icons/pause.svg`} alt="pause" />
           ) : (
