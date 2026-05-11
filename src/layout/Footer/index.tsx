@@ -2,6 +2,7 @@ import { useState } from "react";
 import { chill, jazzy, sleep } from "../../data/songData";
 import "./styles.scss";
 import Player from "../../components/Player";
+import SpotifyPlayer from "../../components/SpotifyPlayer";
 import { CONSTANTS } from "../../constants/constants";
 import { RootState, useAppSelector } from "../../store/store";
 
@@ -42,16 +43,19 @@ const Footer = () => {
           />
         )}
       </div>
-      <div className="author">
-        Made by:
-        <a
-          href={CONSTANTS.AUTHOR_GITHUB_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="author-name"
-        >
-          {CONSTANTS.AUTHOR}
-        </a>
+      <div className="footer-right">
+        <SpotifyPlayer />
+        <div className="author">
+          Made by:
+          <a
+            href={CONSTANTS.AUTHOR_GITHUB_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="author-name"
+          >
+            {CONSTANTS.AUTHOR}
+          </a>
+        </div>
       </div>
     </div>
   );
