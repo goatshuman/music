@@ -29,6 +29,12 @@
     align-items: center;
   }
 
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
   .author {
     display: flex;
     align-items: center;
