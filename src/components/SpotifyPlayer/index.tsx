@@ -22,6 +22,34 @@ import { useCallback, useEffect, useRef, useState } from "react";
     });
   }
 
+  // Use Piped (open YouTube frontend) to search and get a real video ID for reliable playback
+  async function searchYouTubeVideoId(query: string): Promise<string | null> {
+    const apis = [
+      "https://pipedapi.kavin.rocks",
+      "https://pipedapi.adminforge.de",
+      "https://piped-api.garudalinux.org",
+    ];
+    for (const api of apis) {
+      try {
+        const res = await fetch(
+          `${api}/search?q=${encodeURIComponent(query)}&filter=videos`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        const video = (data.items ?? []).find(
+          (item: any) => item.type === "stream" && item.url
+        );
+        if (video?.url) {
+          const id = new URLSearchParams(video.url.split("?")[1] || "").get("v")
+            || video.url.split("/").pop();
+          if (id && id.length > 5) return id;
+        }
+      } catch { /* try next */ }
+    }
+    return null;
+  }
+
   const SpotifyPlayer = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -29,25 +57,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
     const [currentTrack, setCurrentTrack] = useState<ItunesTrack | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [searching, setSearching] = useState(false);
+    const [loadingTrack, setLoadingTrack] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Listen for YouTube player state messages
+    // Listen for YouTube player state via postMessage
     useEffect(() => {
       const handleMessage = (event: MessageEvent) => {
-        if (event.origin !== "https://www.youtube.com") return;
+        if (event.origin !== "https://www.youtube-nocookie.com" && event.origin !== "https://www.youtube.com") return;
         try {
           const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
           if (data.event === "onStateChange") {
-            // 1 = playing, 2 = paused, 0 = ended
-            setIsPlaying(data.info === 1);
+            setIsPlaying(data.info === 1); // 1 = playing
           }
-        } catch {
-          // ignore non-JSON messages
-        }
+        } catch { /* ignore */ }
       };
       window.addEventListener("message", handleMessage);
       return () => window.removeEventListener("message", handleMessage);
@@ -67,14 +93,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
       searchTimer.current = setTimeout(() => search(v), 450);
     };
 
-    const selectTrack = (track: ItunesTrack) => {
+    const selectTrack = async (track: ItunesTrack) => {
       setCurrentTrack(track);
       setIsOpen(false);
-      setIsPlaying(true);
-      if (iframeRef.current) {
+      setLoadingTrack(true);
+      setIsPlaying(false);
+
+      const ytQuery = `${track.trackName} ${track.artistName} audio`;
+      const videoId = await searchYouTubeVideoId(ytQuery);
+
+      if (videoId && iframeRef.current) {
+        iframeRef.current.src =
+          `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+        setIsPlaying(true);
+      } else if (iframeRef.current) {
+        // Fallback: use YouTube search embed
         const q = encodeURIComponent(`${track.trackName} ${track.artistName}`);
-        iframeRef.current.src = `https://www.youtube.com/embed?listType=search&list=${q}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
+        iframeRef.current.src =
+          `https://www.youtube.com/embed?listType=search&list=${q}&autoplay=1&enablejsapi=1`;
+        setIsPlaying(true);
       }
+      setLoadingTrack(false);
     };
 
     const togglePlay = () => {
@@ -82,17 +121,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
       const func = isPlaying ? "pauseVideo" : "playVideo";
       iframeRef.current.contentWindow.postMessage(
         JSON.stringify({ event: "command", func, args: [] }),
-        "https://www.youtube.com"
+        "*"
       );
       setIsPlaying(!isPlaying);
     };
 
-    const bigArt = (url: string) => url.replace("100x100bb", "300x300bb").replace("100x100", "300x300");
+    const bigArt = (url: string) =>
+      url.replace("100x100bb", "300x300bb").replace("100x100", "300x300");
     const openPanel = () => { setIsOpen(true); setTimeout(() => inputRef.current?.focus(), 150); };
 
     return (
       <>
-        {/* Hidden background YouTube iframe player */}
+        {/* Hidden YouTube player iframe */}
         <iframe
           ref={iframeRef}
           style={{ position: "fixed", top: -2, left: -2, width: 1, height: 1, opacity: 0, pointerEvents: "none", zIndex: -1 }}
@@ -104,7 +144,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
           <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
             <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
           </svg>
-          <span>{currentTrack ? "Now Playing" : "Search Music"}</span>
+          <span>{loadingTrack ? "Loading…" : currentTrack ? "Now Playing" : "Search Music"}</span>
         </button>
 
         {currentTrack && !isOpen && (
@@ -114,7 +154,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
               <span className="spotify-miniplayer__title">{currentTrack.trackName}</span>
               <span className="spotify-miniplayer__artist">{currentTrack.artistName}</span>
             </div>
-            <button className="spotify-miniplayer__btn" onClick={togglePlay}>{isPlaying ? "⏸" : "▶"}</button>
+            <button className="spotify-miniplayer__btn" onClick={togglePlay} disabled={loadingTrack}>
+              {loadingTrack ? "…" : isPlaying ? "⏸" : "▶"}
+            </button>
             <button className="spotify-miniplayer__change" onClick={openPanel}>⊕</button>
           </div>
         )}
@@ -126,7 +168,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
                 <svg viewBox="0 0 24 24" fill="#1DB954" width="24" height="24">
                   <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                 </svg>
-                <div><h3>Music Search</h3><p>Plays songs in background via YouTube</p></div>
+                <div><h3>Music Search</h3><p>Plays songs via YouTube in background</p></div>
               </div>
               <button className="spotify-close" onClick={() => setIsOpen(false)}>✕</button>
             </div>
@@ -135,11 +177,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
               <div className="spotify-nowplaying">
                 <img src={bigArt(currentTrack.artworkUrl100)} alt="" className="spotify-nowplaying__art" />
                 <div className="spotify-nowplaying__info">
-                  <span className="spotify-nowplaying__label">Now Playing</span>
+                  <span className="spotify-nowplaying__label">{loadingTrack ? "Loading…" : "Now Playing"}</span>
                   <span className="spotify-nowplaying__title">{currentTrack.trackName}</span>
                   <span className="spotify-nowplaying__artist">{currentTrack.artistName}</span>
                 </div>
-                <button className="spotify-nowplaying__btn" onClick={togglePlay}>{isPlaying ? "⏸" : "▶"}</button>
+                <button className="spotify-nowplaying__btn" onClick={togglePlay} disabled={loadingTrack}>
+                  {loadingTrack ? "…" : isPlaying ? "⏸" : "▶"}
+                </button>
               </div>
             )}
 
