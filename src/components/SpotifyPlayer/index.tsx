@@ -22,12 +22,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
     });
   }
 
-  declare global {
-    interface Window { YT: any; onYouTubeIframeAPIReady: () => void; }
-  }
-
-  let ytApiLoaded = false;
-
   const SpotifyPlayer = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -36,38 +30,27 @@ import { useCallback, useEffect, useRef, useState } from "react";
     const [isPlaying, setIsPlaying] = useState(false);
     const [searching, setSearching] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [playerReady, setPlayerReady] = useState(false);
 
-    const playerRef = useRef<any>(null);
+    const iframeRef = useRef<HTMLIFrameElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Listen for YouTube player state messages
     useEffect(() => {
-      const initPlayer = () => {
-        playerRef.current = new window.YT.Player("yt-bg-player", {
-          height: "1", width: "1",
-          playerVars: {
-            autoplay: 0, controls: 0, disablekb: 1,
-            fs: 0, modestbranding: 1, playsinline: 1, rel: 0,
-          },
-          events: {
-            onReady: () => setPlayerReady(true),
-            onStateChange: (e: any) => setIsPlaying(e.data === 1),
-          },
-        });
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== "https://www.youtube.com") return;
+        try {
+          const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (data.event === "onStateChange") {
+            // 1 = playing, 2 = paused, 0 = ended
+            setIsPlaying(data.info === 1);
+          }
+        } catch {
+          // ignore non-JSON messages
+        }
       };
-      if (window.YT && window.YT.Player) {
-        initPlayer();
-      } else if (!ytApiLoaded) {
-        ytApiLoaded = true;
-        window.onYouTubeIframeAPIReady = initPlayer;
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        document.head.appendChild(tag);
-      } else {
-        const prev = window.onYouTubeIframeAPIReady;
-        window.onYouTubeIframeAPIReady = () => { prev?.(); initPlayer(); };
-      }
+      window.addEventListener("message", handleMessage);
+      return () => window.removeEventListener("message", handleMessage);
     }, []);
 
     const search = useCallback(async (q: string) => {
@@ -87,19 +70,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
     const selectTrack = (track: ItunesTrack) => {
       setCurrentTrack(track);
       setIsOpen(false);
-      if (playerRef.current && playerReady) {
-        playerRef.current.loadPlaylist({
-          listType: "search",
-          list: `${track.trackName} ${track.artistName} full song`,
-          index: 0,
-        });
+      setIsPlaying(true);
+      if (iframeRef.current) {
+        const q = encodeURIComponent(`${track.trackName} ${track.artistName}`);
+        iframeRef.current.src = `https://www.youtube.com/embed?listType=search&list=${q}&autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`;
       }
     };
 
     const togglePlay = () => {
-      if (!playerRef.current) return;
-      if (isPlaying) playerRef.current.pauseVideo();
-      else playerRef.current.playVideo();
+      if (!iframeRef.current?.contentWindow) return;
+      const func = isPlaying ? "pauseVideo" : "playVideo";
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func, args: [] }),
+        "https://www.youtube.com"
+      );
+      setIsPlaying(!isPlaying);
     };
 
     const bigArt = (url: string) => url.replace("100x100bb", "300x300bb").replace("100x100", "300x300");
@@ -107,7 +92,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
     return (
       <>
-        <div id="yt-bg-player" style={{ position:"fixed", top:-2, left:-2, width:1, height:1, opacity:0, pointerEvents:"none", zIndex:-1 }} />
+        {/* Hidden background YouTube iframe player */}
+        <iframe
+          ref={iframeRef}
+          style={{ position: "fixed", top: -2, left: -2, width: 1, height: 1, opacity: 0, pointerEvents: "none", zIndex: -1 }}
+          allow="autoplay; encrypted-media"
+          title="Background music player"
+        />
 
         <button className="spotify-fab" onClick={openPanel} title="Search music">
           <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
@@ -135,7 +126,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
                 <svg viewBox="0 0 24 24" fill="#1DB954" width="24" height="24">
                   <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                 </svg>
-                <div><h3>Music Search</h3><p>Plays full songs in background via YouTube</p></div>
+                <div><h3>Music Search</h3><p>Plays songs in background via YouTube</p></div>
               </div>
               <button className="spotify-close" onClick={() => setIsOpen(false)}>✕</button>
             </div>
