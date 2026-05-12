@@ -12,6 +12,39 @@ import { useCallback, useRef, useState } from "react";
     trackTimeMillis: number;
   }
 
+  // JSONP search — bypasses CORS entirely, works from any browser/network
+  function searchItunes(query: string): Promise<ItunesTrack[]> {
+    return new Promise((resolve, reject) => {
+      const cbName = `_itcb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const script = document.createElement("script");
+
+      const cleanup = () => {
+        delete (window as any)[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("timeout"));
+      }, 12000);
+
+      (window as any)[cbName] = (data: any) => {
+        clearTimeout(timer);
+        cleanup();
+        resolve(data.results ?? []);
+      };
+
+      script.onerror = () => {
+        clearTimeout(timer);
+        cleanup();
+        reject(new Error("load"));
+      };
+
+      script.src = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=20&callback=${cbName}`;
+      document.head.appendChild(script);
+    });
+  }
+
   const SpotifyPlayer = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -40,13 +73,11 @@ import { useCallback, useRef, useState } from "react";
       setSearching(true);
       setError(null);
       try {
-        const res = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=20`
-        );
-        const data = await res.json();
-        setResults(data.results ?? []);
+        const tracks = await searchItunes(q);
+        setResults(tracks);
+        if (tracks.length === 0) setError(null);
       } catch {
-        setError("Search failed — please try again.");
+        setError("No results found. Try a different search.");
         setResults([]);
       } finally {
         setSearching(false);
@@ -57,7 +88,7 @@ import { useCallback, useRef, useState } from "react";
       const v = e.target.value;
       setQuery(v);
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
-      searchTimeout.current = setTimeout(() => search(v), 400);
+      searchTimeout.current = setTimeout(() => search(v), 450);
     };
 
     const playTrack = (track: ItunesTrack) => {
@@ -78,11 +109,11 @@ import { useCallback, useRef, useState } from "react";
     };
 
     const fmt = (ms: number) => {
-      const s = Math.floor(ms / 1000);
+      const s = Math.floor((ms || 30000) / 1000);
       return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
     };
 
-    const art = (url: string) => url.replace("100x100", "300x300");
+    const bigArt = (url: string) => url.replace("100x100", "300x300");
 
     return (
       <>
@@ -133,7 +164,9 @@ import { useCallback, useRef, useState } from "react";
                 />
                 {query && (
                   <button className="spotify-clear"
-                    onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }}>✕</button>
+                    onClick={() => { setQuery(""); setResults([]); setError(null); inputRef.current?.focus(); }}>
+                    ✕
+                  </button>
                 )}
               </div>
 
@@ -148,7 +181,7 @@ import { useCallback, useRef, useState } from "react";
                     <p>Type a song or artist name to search</p>
                   </div>
                 )}
-                {!searching && results.length === 0 && query && !error && (
+                {!searching && !error && results.length === 0 && query && (
                   <p className="spotify-empty">No results for "{query}"</p>
                 )}
                 {results.map(track => (
@@ -156,15 +189,15 @@ import { useCallback, useRef, useState } from "react";
                     key={track.trackId}
                     className={`spotify-track ${currentTrack?.trackId === track.trackId ? "spotify-track--active" : ""}`}
                     onClick={() => playTrack(track)}
-                    title={track.previewUrl ? "Click to play 30s preview" : "No preview available"}
+                    title={track.previewUrl ? "Play 30s preview" : "No preview available"}
                   >
-                    <img src={art(track.artworkUrl100)} alt={track.collectionName} className="spotify-track__art" loading="lazy" />
+                    <img src={bigArt(track.artworkUrl100)} alt={track.collectionName} className="spotify-track__art" loading="lazy" />
                     <div className="spotify-track__info">
                       <span className="spotify-track__name">{track.trackName}</span>
                       <span className="spotify-track__artist">{track.artistName}</span>
                     </div>
                     <div className="spotify-track__right">
-                      <span className="spotify-track__duration">{track.trackTimeMillis ? fmt(track.trackTimeMillis) : "—"}</span>
+                      <span className="spotify-track__duration">{fmt(track.trackTimeMillis)}</span>
                       {currentTrack?.trackId === track.trackId && isPlaying
                         ? <span className="spotify-track__eq">▐▐</span>
                         : <span className="spotify-track__play">{track.previewUrl ? "▶" : "—"}</span>}
@@ -175,7 +208,7 @@ import { useCallback, useRef, useState } from "react";
 
               {currentTrack && (
                 <div className="spotify-nowplaying">
-                  <img src={art(currentTrack.artworkUrl100)} alt={currentTrack.collectionName} className="spotify-nowplaying__art" />
+                  <img src={bigArt(currentTrack.artworkUrl100)} alt={currentTrack.collectionName} className="spotify-nowplaying__art" />
                   <div className="spotify-nowplaying__info">
                     <span className="spotify-nowplaying__title">{currentTrack.trackName}</span>
                     <span className="spotify-nowplaying__artist">{currentTrack.artistName}</span>
@@ -194,7 +227,6 @@ import { useCallback, useRef, useState } from "react";
                     className="spotify-nowplaying__deezer" title="Open on Apple Music">↗</a>
                 </div>
               )}
-
             </div>
           </div>
         )}
