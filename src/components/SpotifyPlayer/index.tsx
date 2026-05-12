@@ -1,21 +1,22 @@
 import { useCallback, useRef, useState } from "react";
   import "./styles.scss";
 
-  interface DeezerTrack {
-    id: number;
-    title: string;
-    artist: { name: string };
-    album: { title: string; cover_medium: string };
-    preview: string;
-    link: string;
-    duration: number;
+  interface ItunesTrack {
+    trackId: number;
+    trackName: string;
+    artistName: string;
+    collectionName: string;
+    artworkUrl100: string;
+    previewUrl: string | null;
+    trackViewUrl: string;
+    trackTimeMillis: number;
   }
 
   const SpotifyPlayer = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState<DeezerTrack[]>([]);
-    const [currentTrack, setCurrentTrack] = useState<DeezerTrack | null>(null);
+    const [results, setResults] = useState<ItunesTrack[]>([]);
+    const [currentTrack, setCurrentTrack] = useState<ItunesTrack | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [searching, setSearching] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -40,13 +41,12 @@ import { useCallback, useRef, useState } from "react";
       setError(null);
       try {
         const res = await fetch(
-          `https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=20&output=json`
+          `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=20`
         );
         const data = await res.json();
-        if (data.error) throw new Error(data.error.message);
-        setResults(data.data ?? []);
+        setResults(data.results ?? []);
       } catch {
-        setError("Search failed. Check your connection.");
+        setError("Search failed — please try again.");
         setResults([]);
       } finally {
         setSearching(false);
@@ -60,16 +60,16 @@ import { useCallback, useRef, useState } from "react";
       searchTimeout.current = setTimeout(() => search(v), 400);
     };
 
-    const playTrack = (track: DeezerTrack) => {
-      if (!track.preview) return;
-      if (currentTrack?.id === track.id) {
+    const playTrack = (track: ItunesTrack) => {
+      if (!track.previewUrl) return;
+      if (currentTrack?.trackId === track.trackId) {
         if (isPlaying) { audioRef.current?.pause(); setIsPlaying(false); }
         else { audioRef.current?.play(); setIsPlaying(true); }
         return;
       }
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.src = track.preview;
+        audioRef.current.src = track.previewUrl;
         audioRef.current.play();
       }
       setCurrentTrack(track);
@@ -77,8 +77,12 @@ import { useCallback, useRef, useState } from "react";
       setProgress(0);
     };
 
-    const fmt = (s: number) =>
-      `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    const fmt = (ms: number) => {
+      const s = Math.floor(ms / 1000);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    };
+
+    const art = (url: string) => url.replace("100x100", "300x300");
 
     return (
       <>
@@ -86,9 +90,7 @@ import { useCallback, useRef, useState } from "react";
           ref={audioRef}
           onTimeUpdate={() => {
             if (!audioRef.current) return;
-            setProgress(
-              (audioRef.current.currentTime / (audioRef.current.duration || 30)) * 100
-            );
+            setProgress((audioRef.current.currentTime / (audioRef.current.duration || 30)) * 100);
           }}
           onEnded={() => setIsPlaying(false)}
         />
@@ -119,8 +121,7 @@ import { useCallback, useRef, useState } from "react";
 
               <div className="spotify-search-bar">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
                 <input
                   ref={inputRef}
@@ -131,17 +132,13 @@ import { useCallback, useRef, useState } from "react";
                   className="spotify-search-input"
                 />
                 {query && (
-                  <button
-                    className="spotify-clear"
-                    onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }}
-                  >✕</button>
+                  <button className="spotify-clear"
+                    onClick={() => { setQuery(""); setResults([]); inputRef.current?.focus(); }}>✕</button>
                 )}
               </div>
 
               <div className="spotify-results">
-                {searching && (
-                  <div className="spotify-loading"><span/><span/><span/></div>
-                )}
+                {searching && <div className="spotify-loading"><span/><span/><span/></div>}
                 {error && <p className="spotify-error">{error}</p>}
                 {!searching && !error && results.length === 0 && !query && (
                   <div className="spotify-empty-state">
@@ -156,26 +153,21 @@ import { useCallback, useRef, useState } from "react";
                 )}
                 {results.map(track => (
                   <button
-                    key={track.id}
-                    className={`spotify-track ${currentTrack?.id === track.id ? "spotify-track--active" : ""}`}
+                    key={track.trackId}
+                    className={`spotify-track ${currentTrack?.trackId === track.trackId ? "spotify-track--active" : ""}`}
                     onClick={() => playTrack(track)}
-                    title={track.preview ? "Click to play 30s preview" : "No preview available"}
+                    title={track.previewUrl ? "Click to play 30s preview" : "No preview available"}
                   >
-                    <img
-                      src={track.album.cover_medium}
-                      alt={track.album.title}
-                      className="spotify-track__art"
-                      loading="lazy"
-                    />
+                    <img src={art(track.artworkUrl100)} alt={track.collectionName} className="spotify-track__art" loading="lazy" />
                     <div className="spotify-track__info">
-                      <span className="spotify-track__name">{track.title}</span>
-                      <span className="spotify-track__artist">{track.artist.name}</span>
+                      <span className="spotify-track__name">{track.trackName}</span>
+                      <span className="spotify-track__artist">{track.artistName}</span>
                     </div>
                     <div className="spotify-track__right">
-                      <span className="spotify-track__duration">{fmt(track.duration)}</span>
-                      {currentTrack?.id === track.id && isPlaying
+                      <span className="spotify-track__duration">{track.trackTimeMillis ? fmt(track.trackTimeMillis) : "—"}</span>
+                      {currentTrack?.trackId === track.trackId && isPlaying
                         ? <span className="spotify-track__eq">▐▐</span>
-                        : <span className="spotify-track__play">{track.preview ? "▶" : "—"}</span>}
+                        : <span className="spotify-track__play">{track.previewUrl ? "▶" : "—"}</span>}
                     </div>
                   </button>
                 ))}
@@ -183,34 +175,23 @@ import { useCallback, useRef, useState } from "react";
 
               {currentTrack && (
                 <div className="spotify-nowplaying">
-                  <img
-                    src={currentTrack.album.cover_medium}
-                    alt={currentTrack.album.title}
-                    className="spotify-nowplaying__art"
-                  />
+                  <img src={art(currentTrack.artworkUrl100)} alt={currentTrack.collectionName} className="spotify-nowplaying__art" />
                   <div className="spotify-nowplaying__info">
-                    <span className="spotify-nowplaying__title">{currentTrack.title}</span>
-                    <span className="spotify-nowplaying__artist">{currentTrack.artist.name}</span>
+                    <span className="spotify-nowplaying__title">{currentTrack.trackName}</span>
+                    <span className="spotify-nowplaying__artist">{currentTrack.artistName}</span>
                     <div className="spotify-nowplaying__bar">
-                      <div className="spotify-nowplaying__progress" style={{width: `${progress}%`}}/>
+                      <div className="spotify-nowplaying__progress" style={{width:`${progress}%`}}/>
                     </div>
                   </div>
-                  <button
-                    className="spotify-nowplaying__btn"
+                  <button className="spotify-nowplaying__btn"
                     onClick={() => {
                       if (isPlaying) { audioRef.current?.pause(); setIsPlaying(false); }
                       else { audioRef.current?.play(); setIsPlaying(true); }
-                    }}
-                  >
+                    }}>
                     {isPlaying ? "▐▐" : "▶"}
                   </button>
-                  <a
-                    href={currentTrack.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="spotify-nowplaying__deezer"
-                    title="Open on Deezer"
-                  >↗</a>
+                  <a href={currentTrack.trackViewUrl} target="_blank" rel="noreferrer"
+                    className="spotify-nowplaying__deezer" title="Open on Apple Music">↗</a>
                 </div>
               )}
 
